@@ -6,6 +6,7 @@ export const COLORS = {
   surfaceDark: '#ffffff',
   surfaceDarker: '#f8fafc',
   surfaceCard: '#ffffff',
+  surfaceHighlight: '#f1f5f9',   // Slate 100
   surfaceBorder: '#e2e8f0',      // Crisp Border (Slate 200)
   borderDark: '#e2e8f0',
   surfaceBorderLight: '#cbd5e1', // Slate 300

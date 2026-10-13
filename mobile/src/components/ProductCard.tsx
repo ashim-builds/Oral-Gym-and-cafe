@@ -56,7 +56,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             source={{ uri: product.main_image }}
             style={styles.grid3Image}
             aspectRatio={1}
-            resizeMode="cover"
+            resizeMode="contain"
           />
 
           {/* Featured Tag */}
@@ -129,7 +129,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           source={{ uri: product.main_image }}
           style={styles.image}
           aspectRatio={horizontal ? 4 / 3 : 1}
-          resizeMode="cover"
+          resizeMode="contain"
         />
 
         {/* Featured Tag */}
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   grid3ImageContainer: {
     width: '100%',
     aspectRatio: 1,
-    backgroundColor: '#161922',
+    backgroundColor: '#ffffff',
     position: 'relative',
     overflow: 'hidden',
   },
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: '100%',
     height: 150,
-    backgroundColor: COLORS.backgroundDark,
+    backgroundColor: '#ffffff',
     position: 'relative',
   },
   horizontalImage: {

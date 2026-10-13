@@ -2,3 +2,5 @@ deployment*/
 node_modules*/
 dist*/
 .env*/
+.expo/
+*.log

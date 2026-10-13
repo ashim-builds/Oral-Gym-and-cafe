@@ -147,7 +147,7 @@ export class NotificationService {
     await this.createNotification({
       recipient_type: 'CUSTOMER',
       customer_id: order.customer_id,
-      title: '🏋️ Order Placed Successfully!',
+      title: 'Order Placed Successfully',
       message: `Your order #${order.order_number} for NPR ${formattedTotal} has been received. Payment mode: ${order.payment_method === 'CASH_ON_PICKUP' ? 'Cash on Pickup' : 'Cash on Delivery'}.`,
       type: 'ORDER_PLACED',
       data: { order_id: order.id, order_number: order.order_number },
@@ -156,7 +156,7 @@ export class NotificationService {
     // 2. Notify Admins
     await this.createNotification({
       recipient_type: 'ADMIN',
-      title: '🔔 New Order Received!',
+      title: 'New Order Received',
       message: `Order #${order.order_number} placed by ${order.customer_name} (${order.customer_phone}) for NPR ${formattedTotal}.`,
       type: 'ORDER_PLACED',
       data: { order_id: order.id, order_number: order.order_number },
@@ -167,25 +167,25 @@ export class NotificationService {
    * Helper: Order Status Changed -> Notify Customer
    */
   async notifyOrderStatusChanged(order: any, newStatus: string) {
-    let title = `📦 Order Status Update`;
+    let title = `Order Status Update`;
     let body = `Your order #${order.order_number} status is now ${newStatus}.`;
 
     if (newStatus === 'CONFIRMED') {
-      title = '✅ Order Confirmed';
+      title = 'Order Confirmed';
       body = `Your order #${order.order_number} has been verified and confirmed. We are packing your items.`;
     } else if (newStatus === 'PROCESSING') {
-      title = '⚡ Preparing Your Order';
+      title = 'Preparing Your Order';
       body = `Your order #${order.order_number} is being prepared at our supplement hub.`;
     } else if (newStatus === 'READY') {
-      title = order.order_type === 'PICKUP' ? '🏢 Ready for Store Pickup' : '🚀 Out for Delivery';
+      title = order.order_type === 'PICKUP' ? 'Ready for Store Pickup' : 'Out for Delivery';
       body = order.order_type === 'PICKUP'
         ? `Your order #${order.order_number} is packed and ready for pickup at our branch!`
         : `Your order #${order.order_number} is out for delivery. Please keep cash ready.`;
     } else if (newStatus === 'COMPLETED') {
-      title = '🎉 Order Completed!';
+      title = 'Order Completed';
       body = `Order #${order.order_number} has been successfully delivered and paid. Thank you for choosing Orla Gym & Cafe!`;
     } else if (newStatus === 'CANCELLED') {
-      title = '❌ Order Cancelled';
+      title = 'Order Cancelled';
       body = `Your order #${order.order_number} was cancelled. Contact us if you have questions.`;
     }
 
@@ -205,7 +205,7 @@ export class NotificationService {
   async notifyLowStock(product: any) {
     await this.createNotification({
       recipient_type: 'ADMIN',
-      title: '⚠️ Low Stock Alert!',
+      title: 'Low Stock Alert',
       message: `Product "${product.name}" is low on stock (${product.stock_quantity} units remaining). Please restock.`,
       type: 'LOW_STOCK',
       data: { product_id: product.id, product_name: product.name },

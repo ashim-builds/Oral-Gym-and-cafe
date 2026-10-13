@@ -196,15 +196,15 @@ export class AdminController {
   // ----------------------------------------------------
   async getOrders(req: AuthenticatedRequest, res: Response) {
     try {
-      const order_status = req.query.order_status as any;
+      const order_status = (req.query.order_status || req.query.status) as any;
       const payment_status = req.query.payment_status as any;
       const order_type = req.query.order_type as any;
       const search = req.query.search ? String(req.query.search) : undefined;
       const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 30;
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
 
       const result = await orderService.getAllOrdersAdmin({
-        order_status,
+        order_status: order_status && order_status !== 'ALL' ? order_status : undefined,
         payment_status,
         order_type,
         search,
@@ -212,7 +212,7 @@ export class AdminController {
         limit,
       });
 
-      return sendSuccess(res, result.orders, 'Orders fetched', 200, result.pagination);
+      return sendSuccess(res, { orders: result.orders, pagination: result.pagination }, 'Orders fetched', 200, result.pagination);
     } catch (err: any) {
       return sendError(res, err.message || 'Failed to fetch orders', 400);
     }

@@ -54,6 +54,7 @@ export const AdminSettingsScreen: React.FC = () => {
       setSaving(true);
       await Promise.all([
         mobileAdminService.updateSetting('delivery_fee', deliveryFee.trim(), 'Standard Delivery Fee in NPR'),
+        mobileAdminService.updateSetting('delivery_charge', deliveryFee.trim(), 'Standard Delivery Fee in NPR'),
         mobileAdminService.updateSetting('free_delivery_threshold', freeThreshold.trim(), 'Threshold for free delivery'),
         mobileAdminService.updateSetting('currency', currency.trim(), 'Store Currency'),
       ]);

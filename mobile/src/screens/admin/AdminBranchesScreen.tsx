@@ -14,6 +14,7 @@ import {
   Switch,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -231,6 +232,18 @@ export const AdminBranchesScreen: React.FC = () => {
             <Ionicons name="time-outline" size={13} color={COLORS.textMuted} />
             <Text style={styles.metaText}>{item.opening_hours}</Text>
           </View>
+        ) : null}
+        {item.map_url ? (
+          <TouchableOpacity
+            style={styles.metaItem}
+            onPress={() => Linking.openURL(item.map_url)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="map-outline" size={13} color={COLORS.primary} />
+            <Text style={[styles.metaText, { color: COLORS.primary, fontWeight: '700' }]}>
+              Open Map Pin
+            </Text>
+          </TouchableOpacity>
         ) : null}
       </View>
 

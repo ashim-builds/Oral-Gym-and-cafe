@@ -108,8 +108,8 @@ function MainTabs() {
           let iconName: any = 'home';
           if (route.name === 'HomeTab') {
             iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'ProductsTab') {
-            iconName = focused ? 'barbell' : 'barbell-outline';
+          } else if (route.name === 'OrdersTab' || route.name === 'ProductsTab') {
+            iconName = focused ? 'receipt' : 'receipt-outline';
           } else if (route.name === 'BranchesTab') {
             iconName = focused ? 'location' : 'location-outline';
           } else if (route.name === 'ProfileTab') {
@@ -120,7 +120,7 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="HomeTab" component={HomeScreen} options={{ tabBarLabel: 'Home' }} />
-      <Tab.Screen name="ProductsTab" component={ProductsScreen} options={{ tabBarLabel: 'Products' }} />
+      <Tab.Screen name="OrdersTab" component={OrdersListScreen} options={{ tabBarLabel: 'Orders' }} />
       
       {/* Center Elevated Flat White Cart Button (Opens Full Screen Cart without Navbar) */}
       <Tab.Screen
@@ -215,6 +215,8 @@ export function AppNavigator() {
         <RootStack.Screen name="AdminProducts" component={AdminProductsScreen} />
         <RootStack.Screen name="AdminCategories" component={AdminCategoriesScreen} />
         <RootStack.Screen name="AdminOrders" component={AdminOrdersScreen} />
+        <RootStack.Screen name="AdminOrdersTab" component={AdminOrdersScreen} />
+        <RootStack.Screen name="AdminOrderDetail" component={AdminOrdersScreen} />
         <RootStack.Screen name="AdminBranches" component={AdminBranchesScreen} />
         <RootStack.Screen name="AdminCustomers" component={AdminCustomersScreen} />
         <RootStack.Screen name="AdminBusinessOwner" component={AdminBusinessOwnerScreen} />

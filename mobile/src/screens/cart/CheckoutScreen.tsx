@@ -11,15 +11,19 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Linking,
+  Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
 import { Header } from '../../components/Header';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import mobileOrderService from '../../services/order.service';
 import shopService from '../../services/shop.service';
+import notificationService from '../../services/notification.service';
 import { Branch, OrderType, PaymentMethod } from '../../types';
 
 export const CheckoutScreen: React.FC = () => {
@@ -31,6 +35,10 @@ export const CheckoutScreen: React.FC = () => {
   const [name, setName] = useState(customer?.name || '');
   const [phone, setPhone] = useState(customer?.phone_number || '');
   const [address, setAddress] = useState(customer?.address || '');
+  const [mapUrl, setMapUrl] = useState('');
+  const [locating, setLocating] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [customMapInput, setCustomMapInput] = useState('');
   const [notes, setNotes] = useState('');
   const [orderingBranch, setOrderingBranch] = useState<Branch | null>(null);
 
@@ -76,6 +84,54 @@ export const CheckoutScreen: React.FC = () => {
     loadCheckoutPreview();
   }, [orderType, items]);
 
+  const handleGetCurrentLocation = async () => {
+    try {
+      setLocating(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location Permission Needed',
+          'Please grant location permissions to detect your delivery point.'
+        );
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+      const gMapLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
+      setMapUrl(gMapLink);
+
+      // Attempt reverse geocoding to suggest text address
+      try {
+        const geoRes = await Location.reverseGeocodeAsync({ latitude, longitude });
+        if (geoRes && geoRes.length > 0) {
+          const place = geoRes[0];
+          const formatted = [place.name, place.street, place.subregion, place.city, place.district]
+            .filter(Boolean)
+            .join(', ');
+          if (formatted && (!address.trim() || address.length < 5)) {
+            setAddress(formatted);
+          }
+        }
+      } catch {}
+
+      Alert.alert('GPS Location Locked', 'Your Google Map delivery coordinates have been attached!');
+    } catch (err: any) {
+      Alert.alert('Location Error', err.message || 'Could not fetch current GPS location.');
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const handleApplyCustomMapLink = () => {
+    if (!customMapInput.trim()) {
+      Alert.alert('Invalid Input', 'Please enter a valid Google Maps link or coordinates.');
+      return;
+    }
+    setMapUrl(customMapInput.trim());
+    setShowMapModal(false);
+    setCustomMapInput('');
+  };
+
   const handlePlaceOrder = async () => {
     setError('');
 
@@ -99,12 +155,17 @@ export const CheckoutScreen: React.FC = () => {
       const payment_method: PaymentMethod =
         orderType === 'DELIVERY' ? 'CASH_ON_DELIVERY' : 'CASH_ON_PICKUP';
 
+      let fullAddress = address.trim();
+      if (orderType === 'DELIVERY' && mapUrl.trim()) {
+        fullAddress += `\n[Map Pin: ${mapUrl.trim()}]`;
+      }
+
       const order = await mobileOrderService.placeOrder({
         order_type: orderType,
         payment_method,
         customer_name: name.trim(),
         customer_phone: phone.trim(),
-        delivery_address: orderType === 'DELIVERY' ? address.trim() : undefined,
+        delivery_address: orderType === 'DELIVERY' ? fullAddress : undefined,
         notes: notes.trim() || undefined,
         items: items.map((it) => ({
           product_id: it.product.id,
@@ -114,6 +175,16 @@ export const CheckoutScreen: React.FC = () => {
 
       // Clear Cart on successful order
       clearCart();
+
+      // Trigger native notification center notification
+      try {
+        await notificationService.showLocalNotification(
+          'Order Placed Successfully',
+          `Your order #${order.order_number || order.id} has been received. Preparing your package!`
+        );
+      } catch (notifyErr) {
+        console.log('Local notification error:', notifyErr);
+      }
 
       // Navigate to confirmation
       navigation.reset({
@@ -234,7 +305,25 @@ export const CheckoutScreen: React.FC = () => {
 
           {orderType === 'DELIVERY' && (
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Delivery Address *</Text>
+              <View style={styles.addressLabelRow}>
+                <Text style={styles.label}>Delivery Address *</Text>
+                <TouchableOpacity
+                  style={styles.gpsAutoBtn}
+                  onPress={handleGetCurrentLocation}
+                  disabled={locating}
+                  activeOpacity={0.7}
+                >
+                  {locating ? (
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                  ) : (
+                    <>
+                      <Ionicons name="navigate" size={13} color={COLORS.primary} />
+                      <Text style={styles.gpsAutoBtnText}>Use My GPS</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
               <View style={[styles.inputContainer, { height: 70 }]}>
                 <Ionicons
                   name="location-outline"
@@ -251,6 +340,56 @@ export const CheckoutScreen: React.FC = () => {
                   multiline
                 />
               </View>
+
+              {/* Map Selection Action Row */}
+              <View style={styles.mapActionRow}>
+                <TouchableOpacity
+                  style={styles.mapPinSelectBtn}
+                  onPress={() => setShowMapModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="map-outline" size={15} color={COLORS.textPrimary} />
+                  <Text style={styles.mapPinSelectBtnText}>
+                    {mapUrl ? 'Change Map Pin' : 'Select / Pin on Map'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.openGMapExternalBtn}
+                  onPress={() => Linking.openURL('https://www.google.com/maps')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="open-outline" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.openGMapExternalText}>Open Google Maps</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Attached Map Pin Status */}
+              {mapUrl ? (
+                <View style={styles.mapPinAttachedBadge}>
+                  <Ionicons name="checkmark-circle" size={18} color={COLORS.accentEmerald} />
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={styles.mapPinAttachedTitle}>Google Map Pin Attached</Text>
+                    <Text style={styles.mapPinAttachedSub} numberOfLines={1}>
+                      {mapUrl}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.mapPinPreviewBtn}
+                    onPress={() => Linking.openURL(mapUrl)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="eye-outline" size={15} color={COLORS.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.mapPinRemoveBtn}
+                    onPress={() => setMapUrl('')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-circle" size={17} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
           )}
 
@@ -358,6 +497,82 @@ export const CheckoutScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
       </KeyboardAvoidingView>
+
+      {/* Map Location Modal */}
+      <Modal
+        visible={showMapModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMapModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <Ionicons name="map" size={20} color={COLORS.primary} />
+                <Text style={styles.modalTitle}>Set Google Map Location</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowMapModal(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={20} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Provide your Google Maps pin or location link so our delivery team can reach your doorstep accurately.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.modalOpenGMapBtn}
+              onPress={() => Linking.openURL('https://www.google.com/maps')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="navigate-circle" size={20} color={COLORS.white} />
+              <Text style={styles.modalOpenGMapBtnText}>1. Open Google Maps to Find Your Home</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.modalStepHint}>
+              Tap "Share" on Google Maps, copy the link, and paste it below:
+            </Text>
+
+            <View style={styles.modalInputWrap}>
+              <Ionicons name="link-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.modalTextInput}
+                placeholder="Paste Google Maps link (e.g. https://maps.app.goo.gl/...)"
+                placeholderTextColor={COLORS.textMuted}
+                value={customMapInput}
+                onChangeText={setCustomMapInput}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowMapModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalConfirmBtn}
+                onPress={handleApplyCustomMapLink}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalConfirmBtnText}>Save Map Pin</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -615,5 +830,198 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 14,
     fontWeight: '800',
+  },
+  addressLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  gpsAutoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.25)',
+  },
+  gpsAutoBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  mapActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    gap: 8,
+  },
+  mapPinSelectBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 38,
+    backgroundColor: COLORS.surfaceHighlight,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  mapPinSelectBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  openGMapExternalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    height: 38,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  openGMapExternalText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  mapPinAttachedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: 10,
+    marginTop: 8,
+  },
+  mapPinAttachedTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.accentEmerald,
+  },
+  mapPinAttachedSub: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  mapPinPreviewBtn: {
+    padding: 6,
+    marginRight: 4,
+  },
+  mapPinRemoveBtn: {
+    padding: 6,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: SPACING.lg,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    gap: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 17,
+  },
+  modalOpenGMapBtn: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 44,
+    borderRadius: BORDER_RADIUS.md,
+    marginTop: 4,
+  },
+  modalOpenGMapBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  modalStepHint: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 4,
+  },
+  modalInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 48,
+    backgroundColor: COLORS.surfaceHighlight,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: 12,
+  },
+  modalTextInput: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  modalCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    height: 44,
+    backgroundColor: COLORS.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BORDER_RADIUS.md,
+  },
+  modalConfirmBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.white,
   },
 });

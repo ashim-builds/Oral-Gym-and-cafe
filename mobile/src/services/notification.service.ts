@@ -28,11 +28,10 @@ class NotificationService {
    */
   async registerForPushNotifications(): Promise<string | null> {
     try {
-      // Dynamic import to avoid crashes if expo-notifications is in bare dev environment
       const Device = await import('expo-device');
       const Notifications = await import('expo-notifications');
 
-      // Set notification handler so notifications show while app is in foreground
+      // Set notification handler so notifications show while app is in foreground and notification center
       Notifications.setNotificationHandler({
         handleNotification: async () => ({
           shouldShowAlert: true,
@@ -42,6 +41,19 @@ class NotificationService {
           shouldShowList: true,
         }),
       });
+
+      // Configure Android Notification Channel (Required for Android 8+ Notification Center)
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Order & Store Notifications',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#DC2626',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+        });
+      }
 
       if (Device.isDevice) {
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -68,6 +80,24 @@ class NotificationService {
     } catch (err: any) {
       return null;
     }
+  }
+
+  /**
+   * Post immediate system notification to device notification center
+   */
+  async showLocalNotification(title: string, body: string, data?: any) {
+    try {
+      const Notifications = await import('expo-notifications');
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data,
+          sound: 'default',
+        },
+        trigger: null,
+      });
+    } catch {}
   }
 
   /**

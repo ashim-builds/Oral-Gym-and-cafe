@@ -40,8 +40,10 @@ export const HomeScreen: React.FC = () => {
   const { itemCount, subtotal } = useCart();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [orderingBranch, setOrderingBranch] = useState<Branch | null>(null);
   const [business, setBusiness] = useState<BusinessInfo | null>(null);
@@ -59,7 +61,8 @@ export const HomeScreen: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [feat, cats, brs, ordBr, biz, own] = await Promise.all([
+      const [allProds, feat, cats, brs, ordBr, biz, own] = await Promise.all([
+        shopService.getProducts().catch(() => []),
         shopService.getFeaturedProducts().catch(() => []),
         shopService.getCategories().catch(() => []),
         shopService.getBranches().catch(() => []),
@@ -68,6 +71,7 @@ export const HomeScreen: React.FC = () => {
         shopService.getOwnerDetails().catch(() => null),
       ]);
 
+      setAllProducts(allProds || []);
       setFeaturedProducts(feat || []);
       setCategories(cats || []);
       setBranches(brs || []);
@@ -116,19 +120,39 @@ export const HomeScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const handleSearchSubmit = () => {
-    navigation.navigate("Search", { query: searchQuery.trim() });
-  };
-
   const openDirections = (branch: Branch) => {
+    if (branch.map_url && branch.map_url.trim().startsWith("http")) {
+      Linking.openURL(branch.map_url.trim()).catch(() => {});
+      return;
+    }
+    if (branch.latitude && branch.longitude) {
+      Linking.openURL(
+        `https://www.google.com/maps?q=${branch.latitude},${branch.longitude}`
+      ).catch(() => {});
+      return;
+    }
     Linking.openURL(
-      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(branch.address)}`,
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        `${branch.name} ${branch.address || ""}`
+      )}`
     ).catch(() => {});
   };
 
   const openSocial = (url?: string) => {
     if (url) Linking.openURL(url).catch(() => {});
   };
+
+  const displayedProducts = allProducts.filter((p) => {
+    const q = searchQuery.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      (p.category?.name && p.category.name.toLowerCase().includes(q)) ||
+      (p.description && p.description.toLowerCase().includes(q));
+    const matchesCategory =
+      selectedCategory === null || p.category_id === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   // Header Title & Greeting Animation on scroll
   const headerTitleOpacity = scrollY.interpolate({
@@ -198,15 +222,9 @@ export const HomeScreen: React.FC = () => {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Sticky Clean Search Box */}
+        {/* Sticky Clean Search Box - Live filters products directly on Home */}
         <View style={styles.searchBarWrapper}>
-          <TouchableOpacity
-            style={styles.searchBar}
-            activeOpacity={0.88}
-            onPress={() =>
-              navigation.navigate("Search", { query: searchQuery.trim() })
-            }
-          >
+          <View style={styles.searchBar}>
             <Ionicons
               name="search"
               size={16}
@@ -219,10 +237,6 @@ export const HomeScreen: React.FC = () => {
               placeholderTextColor={COLORS.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearchSubmit}
-              onFocus={() =>
-                navigation.navigate("Search", { query: searchQuery.trim() })
-              }
               returnKeyType="search"
             />
             {searchQuery.length > 0 ? (
@@ -236,12 +250,8 @@ export const HomeScreen: React.FC = () => {
                   color={COLORS.textMuted}
                 />
               </TouchableOpacity>
-            ) : (
-              <View style={styles.searchPill}>
-                <Text style={styles.searchPillText}>Search</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
       </View>
 
@@ -296,17 +306,19 @@ export const HomeScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Categories Section (Only if categories exist) */}
+        {/* Categories Section (Filter directly on Home Screen) */}
         {categories.length > 0 && (
           <>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleRow}>
                 <Ionicons name="grid-outline" size={18} color={COLORS.primary} />
-                <Text style={styles.sectionTitle}>Shop by Category</Text>
+                <Text style={styles.sectionTitle}>Filter by Category</Text>
               </View>
-              <TouchableOpacity onPress={() => navigation.navigate("ProductsTab")}>
-                <Text style={styles.seeAllText}>View All</Text>
-              </TouchableOpacity>
+              {selectedCategory !== null && (
+                <TouchableOpacity onPress={() => setSelectedCategory(null)}>
+                  <Text style={styles.seeAllText}>Clear Filter</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <ScrollView
@@ -314,70 +326,137 @@ export const HomeScreen: React.FC = () => {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.categoriesScroll}
             >
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={styles.categoryCard}
-                  activeOpacity={0.8}
-                  onPress={() =>
-                    navigation.navigate("ProductsTab", { categoryId: cat.id })
-                  }
+              <TouchableOpacity
+                style={[
+                  styles.categoryCard,
+                  selectedCategory === null && styles.categoryCardActive,
+                ]}
+                activeOpacity={0.8}
+                onPress={() => setSelectedCategory(null)}
+              >
+                <View
+                  style={[
+                    styles.categoryImage,
+                    {
+                      backgroundColor:
+                        selectedCategory === null ? COLORS.primary : COLORS.surfaceHighlight,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    },
+                  ]}
                 >
-                  <OptimizedImage
-                    source={{ uri: cat.image || "" }}
-                    style={styles.categoryImage}
-                    aspectRatio={4 / 3}
-                    resizeMode="cover"
-                    fallbackIcon="layers-outline"
+                  <Ionicons
+                    name="apps-outline"
+                    size={22}
+                    color={selectedCategory === null ? COLORS.white : COLORS.textPrimary}
                   />
-                  <View style={styles.categoryOverlay}>
-                    <Text style={styles.categoryTitle} numberOfLines={2}>
-                      {cat.name}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+                </View>
+                <View style={styles.categoryOverlay}>
+                  <Text style={styles.categoryTitle}>All</Text>
+                </View>
+              </TouchableOpacity>
+
+              {categories.map((cat) => {
+                const isActive = selectedCategory === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[styles.categoryCard, isActive && styles.categoryCardActive]}
+                    activeOpacity={0.8}
+                    onPress={() =>
+                      setSelectedCategory(isActive ? null : cat.id)
+                    }
+                  >
+                    <OptimizedImage
+                      source={{ uri: cat.image || "" }}
+                      style={styles.categoryImage}
+                      aspectRatio={4 / 3}
+                      resizeMode="cover"
+                      fallbackIcon="layers-outline"
+                    />
+                    <View style={styles.categoryOverlay}>
+                      <Text style={styles.categoryTitle} numberOfLines={2}>
+                        {cat.name}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </>
+        )}
+
+        {/* Featured & Trending Supplements (if featured items exist and no category filter) */}
+        {featuredProducts.length > 0 && selectedCategory === null && !searchQuery.trim() && (
+          <>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="flame" size={20} color={COLORS.primary} />
+                <Text style={styles.sectionTitle}>Featured & Trending</Text>
+              </View>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.featuredScroll}
+            >
+              {featuredProducts.map((p) => (
+                <ProductCard key={p.id} product={p} horizontal />
               ))}
             </ScrollView>
           </>
         )}
 
-        {/* Featured & Trending Supplements */}
+        {/* All Products (3 Products in a Row Grid on Home Page) */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="flame" size={20} color={COLORS.primary} />
-            <Text style={styles.sectionTitle}>Featured & Trending</Text>
+            <Ionicons name="bag-handle" size={18} color={COLORS.primary} />
+            <Text style={styles.sectionTitle}>
+              {selectedCategory
+                ? `${categories.find((c) => c.id === selectedCategory)?.name || "Category"} (${displayedProducts.length})`
+                : `All Supplements & Products (${displayedProducts.length})`}
+            </Text>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate("ProductsTab")}>
-            <Text style={styles.seeAllText}>Explore</Text>
-          </TouchableOpacity>
+          {selectedCategory !== null && (
+            <TouchableOpacity onPress={() => setSelectedCategory(null)}>
+              <Text style={styles.seeAllText}>Show All</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.featuredScroll}
-        >
-          {featuredProducts.map((p) => (
-            <ProductCard key={p.id} product={p} horizontal />
-          ))}
-        </ScrollView>
+        {displayedProducts.length === 0 ? (
+          <View style={styles.emptyProductsBox}>
+            <Ionicons name="cube-outline" size={32} color={COLORS.textMuted} />
+            <Text style={styles.emptyProductsTitle}>No products found</Text>
+            <Text style={styles.emptyProductsSub}>
+              {searchQuery ? `No items match "${searchQuery}"` : "No products available in this category."}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.grid3Row}>
+            {displayedProducts.map((p) => (
+              <ProductCard key={p.id} product={p} grid3={true} />
+            ))}
+          </View>
+        )}
 
-        {/* Active Online Ordering Hub Spotlight */}
+        {/* Active Online Ordering Hub & Working Store Map */}
         {orderingBranch && (
           <View style={styles.hubContainer}>
             <View style={styles.hubHeaderRow}>
               <View style={styles.hubBadge}>
                 <View style={styles.liveDot} />
-                <Text style={styles.hubBadgeText}>ACTIVE ORDERING HUB</Text>
+                <Text style={styles.hubBadgeText}>STORE MAP & ORDERING HUB</Text>
               </View>
-              <Text style={styles.hubSubtag}>Primary Store</Text>
+              <Text style={styles.hubSubtag}>Primary Branch</Text>
             </View>
 
             <Text style={styles.hubTitle}>{orderingBranch.name}</Text>
 
             <View style={styles.hubDetailsRow}>
               <Ionicons
-                name="location-outline"
+                name="location"
                 size={16}
                 color={COLORS.primary}
               />
@@ -397,18 +476,30 @@ export const HomeScreen: React.FC = () => {
               </View>
             )}
 
-            <TouchableOpacity
-              style={styles.hubNavButton}
-              onPress={() => openDirections(orderingBranch)}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name="navigate-circle-outline"
-                size={18}
-                color={COLORS.primary}
-              />
-              <Text style={styles.hubNavText}>Get Directions to Store Hub</Text>
-            </TouchableOpacity>
+            <View style={styles.hubButtonsRow}>
+              <TouchableOpacity
+                style={styles.hubNavButton}
+                onPress={() => openDirections(orderingBranch)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="map"
+                  size={16}
+                  color={COLORS.white}
+                />
+                <Text style={styles.hubNavText}>Open in Google Maps</Text>
+              </TouchableOpacity>
+
+              {orderingBranch.phone && (
+                <TouchableOpacity
+                  style={styles.hubCallButton}
+                  onPress={() => Linking.openURL(`tel:${orderingBranch.phone}`)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="call" size={16} color={COLORS.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
 
@@ -435,7 +526,7 @@ export const HomeScreen: React.FC = () => {
               key={b.id}
               style={styles.branchItem}
               activeOpacity={0.8}
-              onPress={() => navigation.navigate("BranchesTab")}
+              onPress={() => openDirections(b)}
             >
               <View style={{ flex: 1 }}>
                 <View style={styles.branchTitleRow}>
@@ -447,14 +538,15 @@ export const HomeScreen: React.FC = () => {
                 </Text>
               </View>
 
-              <View style={styles.branchStatus}>
-                {b.can_order ? (
-                  <View style={styles.orderableTag}>
-                    <Text style={styles.branchOrderable}>Ordering Hub</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.branchStoreOnly}>Store Only</Text>
-                )}
+              <View style={styles.branchRightCol}>
+                <TouchableOpacity
+                  style={styles.branchMapBtn}
+                  onPress={() => openDirections(b)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="map-outline" size={15} color={COLORS.primary} />
+                  <Text style={styles.branchMapBtnText}>Map</Text>
+                </TouchableOpacity>
               </View>
             </TouchableOpacity>
           ))}
@@ -693,6 +785,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.surfaceBorder,
   },
+  categoryCardActive: {
+    borderColor: COLORS.primary,
+    borderWidth: 2,
+  },
   categoryImage: {
     width: "100%",
     height: "100%",
@@ -719,7 +815,35 @@ const styles = StyleSheet.create({
     paddingLeft: SPACING.md,
     paddingRight: SPACING.xs,
   },
-  // Hub Spotlight
+  // Grid 3 in a Row for All Products on Home Page
+  grid3Row: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: SPACING.md,
+    gap: 8,
+  },
+  emptyProductsBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: SPACING.xl,
+    marginHorizontal: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  emptyProductsTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+    marginTop: 8,
+  },
+  emptyProductsSub: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  // Hub Spotlight & Store Map
   hubContainer: {
     backgroundColor: COLORS.surface,
     marginHorizontal: SPACING.md,
@@ -782,22 +906,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
   },
+  hubButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+  },
   hubNavButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    borderRadius: BORDER_RADIUS.md,
+    gap: 6,
+    ...SHADOWS.primary,
+  },
+  hubNavText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.white,
+  },
+  hubCallButton: {
+    width: 42,
+    height: 42,
+    borderRadius: BORDER_RADIUS.md,
     backgroundColor: "#FFF1F2",
     borderWidth: 1,
     borderColor: "#FECDD3",
-    paddingVertical: 8,
-    borderRadius: BORDER_RADIUS.sm,
-    marginTop: 8,
-    gap: 6,
-  },
-  hubNavText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
   },
   // Curved Circle Cart Section (Top of Branches)
   curveCartWrapper: {
@@ -910,6 +1049,25 @@ const styles = StyleSheet.create({
   },
   branchStatus: {
     marginLeft: 8,
+  },
+  branchRightCol: {
+    marginLeft: 10,
+  },
+  branchMapBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFF1F2",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: "#FECDD3",
+  },
+  branchMapBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primary,
   },
   orderableTag: {
     backgroundColor: "#DCFCE7",

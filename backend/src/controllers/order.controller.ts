@@ -127,7 +127,35 @@ export class OrderController {
         });
       }
 
-      const deliveryCharge = order_type === 'DELIVERY' ? ENV.DEFAULT_DELIVERY_CHARGE : 0;
+      // Calculate delivery charge from settings table
+      let configuredDeliveryCharge = ENV.DEFAULT_DELIVERY_CHARGE;
+      let freeDeliveryThreshold: number | null = null;
+      try {
+        const settings = await prisma.setting.findMany({
+          where: {
+            key: { in: ['delivery_fee', 'delivery_charge', 'free_delivery_threshold'] },
+          },
+        });
+        for (const s of settings) {
+          if (s.key === 'delivery_fee' || s.key === 'delivery_charge') {
+            const val = parseFloat(s.value);
+            if (!isNaN(val) && val >= 0) configuredDeliveryCharge = val;
+          }
+          if (s.key === 'free_delivery_threshold') {
+            const val = parseFloat(s.value);
+            if (!isNaN(val) && val > 0) freeDeliveryThreshold = val;
+          }
+        }
+      } catch {}
+
+      let deliveryCharge = 0;
+      if (order_type === 'DELIVERY') {
+        if (freeDeliveryThreshold && subtotal >= freeDeliveryThreshold) {
+          deliveryCharge = 0;
+        } else {
+          deliveryCharge = configuredDeliveryCharge;
+        }
+      }
       const totalAmount = subtotal + deliveryCharge;
 
       return sendSuccess(res, {

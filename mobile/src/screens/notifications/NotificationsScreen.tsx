@@ -87,10 +87,7 @@ export const NotificationsScreen: React.FC = () => {
     // Deep navigation based on notification data
     if (item.data?.order_id) {
       if (isAdminAuthenticated && adminUser) {
-        navigation.navigate('AdminOrdersTab', {
-          screen: 'AdminOrderDetail',
-          params: { orderId: item.data.order_id },
-        });
+        navigation.navigate('AdminOrders', { orderId: item.data.order_id });
       } else {
         navigation.navigate('OrderDetail', { orderId: item.data.order_id });
       }

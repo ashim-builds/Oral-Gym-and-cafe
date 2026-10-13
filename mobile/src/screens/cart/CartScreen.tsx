@@ -69,21 +69,26 @@ export const CartScreen: React.FC = () => {
               <TouchableOpacity
                 onPress={() => updateQuantity(item.product.id, item.quantity - 1)}
                 style={styles.stepBtn}
+                activeOpacity={0.8}
               >
-                <Ionicons name="remove" size={16} color={COLORS.white} />
+                <Ionicons name="remove" size={15} color="#ffffff" />
               </TouchableOpacity>
 
               <Text style={styles.stepQty}>{item.quantity}</Text>
 
               <TouchableOpacity
                 onPress={() => updateQuantity(item.product.id, item.quantity + 1)}
-                style={styles.stepBtn}
+                style={[
+                  styles.stepBtn,
+                  item.quantity >= item.product.stock_quantity && styles.stepBtnDisabled,
+                ]}
                 disabled={item.quantity >= item.product.stock_quantity}
+                activeOpacity={0.8}
               >
                 <Ionicons
                   name="add"
-                  size={16}
-                  color={item.quantity >= item.product.stock_quantity ? COLORS.textMuted : COLORS.white}
+                  size={15}
+                  color={item.quantity >= item.product.stock_quantity ? '#94a3b8' : '#ffffff'}
                 />
               </TouchableOpacity>
             </View>
@@ -249,23 +254,30 @@ const styles = StyleSheet.create({
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#f1f5f9',
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.surfaceBorder,
+    borderColor: '#e2e8f0',
+    padding: 2,
+    gap: 3,
   },
   stepBtn: {
     width: 28,
     height: 28,
+    borderRadius: 6,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  stepBtnDisabled: {
+    backgroundColor: '#cbd5e1',
+  },
   stepQty: {
-    width: 26,
+    minWidth: 26,
     textAlign: 'center',
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '800',
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '900',
   },
   itemTotal: {
     fontSize: 14,

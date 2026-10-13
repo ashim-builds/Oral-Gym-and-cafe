@@ -131,8 +131,35 @@ export class OrderService {
         });
       }
 
-      // Calculate delivery charge
-      const deliveryChargeNum = input.order_type === 'DELIVERY' ? ENV.DEFAULT_DELIVERY_CHARGE : 0;
+      // Calculate delivery charge from admin settings
+      let configuredDeliveryCharge = ENV.DEFAULT_DELIVERY_CHARGE;
+      let freeDeliveryThreshold: number | null = null;
+      try {
+        const settings = await tx.setting.findMany({
+          where: {
+            key: { in: ['delivery_fee', 'delivery_charge', 'free_delivery_threshold'] },
+          },
+        });
+        for (const s of settings) {
+          if (s.key === 'delivery_fee' || s.key === 'delivery_charge') {
+            const val = parseFloat(s.value);
+            if (!isNaN(val) && val >= 0) configuredDeliveryCharge = val;
+          }
+          if (s.key === 'free_delivery_threshold') {
+            const val = parseFloat(s.value);
+            if (!isNaN(val) && val > 0) freeDeliveryThreshold = val;
+          }
+        }
+      } catch {}
+
+      let deliveryChargeNum = 0;
+      if (input.order_type === 'DELIVERY') {
+        if (freeDeliveryThreshold && subtotalNum >= freeDeliveryThreshold) {
+          deliveryChargeNum = 0;
+        } else {
+          deliveryChargeNum = configuredDeliveryCharge;
+        }
+      }
       const totalAmountNum = subtotalNum + deliveryChargeNum;
 
       // Update customer address/name if not previously saved

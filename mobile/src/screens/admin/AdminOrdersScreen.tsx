@@ -10,8 +10,9 @@ import {
   Modal,
   ScrollView,
   Alert,
+  Linking,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS } from '../../constants/theme';
 import mobileAdminService from '../../services/admin.service';
@@ -20,6 +21,7 @@ const ORDER_STATUS_FLOW = ['PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY', 'READY_FO
 
 export const AdminOrdersScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
 
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,9 +34,11 @@ export const AdminOrdersScreen: React.FC = () => {
 
   const fetchOrders = async () => {
     try {
-      const params = statusFilter !== 'ALL' ? { status: statusFilter } : undefined;
+      setLoading(true);
+      const params = statusFilter !== 'ALL' ? { order_status: statusFilter, status: statusFilter } : undefined;
       const res = await mobileAdminService.getOrders(params);
-      setOrders(res.orders || []);
+      const list = Array.isArray(res) ? res : (res?.orders || []);
+      setOrders(list);
     } catch (err) {
       console.error('Failed to load admin orders:', err);
     } finally {
@@ -46,6 +50,30 @@ export const AdminOrdersScreen: React.FC = () => {
   useEffect(() => {
     fetchOrders();
   }, [statusFilter]);
+
+  // Handle incoming orderId from push notification or dashboard
+  useEffect(() => {
+    const targetId = route.params?.orderId;
+    if (targetId && orders.length > 0) {
+      const found = orders.find((o) => o.id === Number(targetId));
+      if (found) {
+        setSelectedOrder(found);
+      }
+    }
+  }, [route.params?.orderId, orders]);
+
+  const openGoogleMapsDelivery = (order: any) => {
+    if (!order) return;
+    const address = order.delivery_address || '';
+    const urlMatch = address.match(/https?:\/\/[^\s\]]+/);
+    if (urlMatch) {
+      Linking.openURL(urlMatch[0]).catch(() => {});
+      return;
+    }
+    const cleanAddress = address.replace(/\[Map Pin:.*?\]/g, '').trim();
+    const query = cleanAddress ? encodeURIComponent(cleanAddress) : 'Pokhara';
+    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${query}`).catch(() => {});
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -134,18 +162,32 @@ export const AdminOrdersScreen: React.FC = () => {
         <View style={styles.cardBody}>
           <View style={styles.infoRow}>
             <Ionicons
-              name={item.delivery_type === 'DELIVERY' ? 'bicycle-outline' : 'storefront-outline'}
+              name={(item.order_type || item.delivery_type) === 'DELIVERY' ? 'bicycle-outline' : 'storefront-outline'}
               size={14}
               color={COLORS.textSecondary}
             />
             <Text style={styles.infoText}>
-              {item.delivery_type === 'DELIVERY' ? 'Home Delivery' : 'Pickup at Store'} ({item.payment_method})
+              {(item.order_type || item.delivery_type) === 'DELIVERY' ? 'Home Delivery' : 'Pickup at Store'} ({item.payment_method})
             </Text>
           </View>
           <Text style={styles.itemCountText}>
             {item.items?.length || 0} item{(item.items?.length || 0) > 1 ? 's' : ''}
           </Text>
         </View>
+
+        {(item.order_type || item.delivery_type) === 'DELIVERY' && item.delivery_address && (
+          <TouchableOpacity
+            style={styles.cardMapsBtn}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              openGoogleMapsDelivery(item);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="map-outline" size={14} color="#ffffff" />
+            <Text style={styles.cardMapsBtnText}>Open Google Maps</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.cardFooter}>
           <Text style={styles.dateText}>{new Date(item.created_at).toLocaleDateString()}</Text>
@@ -229,23 +271,35 @@ export const AdminOrdersScreen: React.FC = () => {
                   <Text style={styles.sectionHeading}>CUSTOMER & DELIVERY</Text>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Recipient:</Text>
-                    <Text style={styles.detailVal}>{selectedOrder.delivery_name || selectedOrder.customer?.name}</Text>
+                    <Text style={styles.detailVal}>{selectedOrder.customer_name || selectedOrder.delivery_name || selectedOrder.customer?.name}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Phone:</Text>
-                    <Text style={styles.detailVal}>{selectedOrder.delivery_phone || selectedOrder.customer?.phone}</Text>
+                    <Text style={styles.detailVal}>{selectedOrder.customer_phone || selectedOrder.delivery_phone || selectedOrder.customer?.phone_number || selectedOrder.customer?.phone}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Method:</Text>
                     <Text style={styles.detailVal}>
-                      {selectedOrder.delivery_type === 'DELIVERY' ? 'Home Delivery (COD)' : 'Branch Counter Pickup'}
+                      {(selectedOrder.order_type || selectedOrder.delivery_type) === 'DELIVERY' ? 'Home Delivery (COD)' : 'Branch Counter Pickup'}
                     </Text>
                   </View>
-                  {selectedOrder.delivery_type === 'DELIVERY' && selectedOrder.delivery_address && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Address:</Text>
-                      <Text style={styles.detailVal}>{selectedOrder.delivery_address}</Text>
-                    </View>
+                  {(selectedOrder.order_type || selectedOrder.delivery_type) === 'DELIVERY' && selectedOrder.delivery_address && (
+                    <>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Address:</Text>
+                        <Text style={styles.detailVal}>{selectedOrder.delivery_address}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.modalMapsDeliveryBtn}
+                        onPress={() => openGoogleMapsDelivery(selectedOrder)}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="navigate" size={18} color="#ffffff" />
+                        <Text style={styles.modalMapsDeliveryBtnText}>
+                          Navigate with Google Maps (Driver Delivery)
+                        </Text>
+                      </TouchableOpacity>
+                    </>
                   )}
                 </View>
 
@@ -257,17 +311,17 @@ export const AdminOrdersScreen: React.FC = () => {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.orderItemName}>{item.product?.name || item.product_name || `Item #${item.product_id}`}</Text>
                         <Text style={styles.orderItemSub}>
-                          {item.quantity} x NPR {Number(item.unit_price).toLocaleString()}
+                          {item.quantity} x NPR {Number(item.unit_price || item.product_price).toLocaleString()}
                         </Text>
                       </View>
                       <Text style={styles.orderItemTotal}>
-                        NPR {Number(item.total_price || item.unit_price * item.quantity).toLocaleString()}
+                        NPR {Number(item.total_price || item.subtotal || (item.unit_price || item.product_price) * item.quantity).toLocaleString()}
                       </Text>
                     </View>
                   ))}
                   <View style={styles.itemSummaryRow}>
                     <Text style={styles.summaryLabel}>Delivery Fee</Text>
-                    <Text style={styles.summaryVal}>NPR {Number(selectedOrder.delivery_fee || 0).toLocaleString()}</Text>
+                    <Text style={styles.summaryVal}>NPR {Number(selectedOrder.delivery_charge || selectedOrder.delivery_fee || 0).toLocaleString()}</Text>
                   </View>
                   <View style={[styles.itemSummaryRow, { borderTopWidth: 1, borderColor: COLORS.borderDark, paddingTop: SPACING.sm }]}>
                     <Text style={styles.summaryGrandLabel}>Grand Total (CASH)</Text>
@@ -692,5 +746,38 @@ const styles = StyleSheet.create({
   updatingText: {
     color: COLORS.textSecondary,
     fontSize: 13,
+  },
+  cardMapsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginHorizontal: SPACING.md,
+    marginTop: 6,
+    gap: 6,
+  },
+  cardMapsBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  modalMapsDeliveryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginTop: 10,
+    gap: 8,
+  },
+  modalMapsDeliveryBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });
