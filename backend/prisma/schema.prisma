@@ -1,0 +1,277 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderType {
+  DELIVERY
+  PICKUP
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  CASH_ON_PICKUP
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+model Admin {
+  id            Int            @id @default(autoincrement())
+  email         String         @unique
+  password_hash String
+  name          String
+  role          String         @default("ADMIN")
+  is_active     Boolean        @default(true)
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+
+  notifications Notification[]
+  push_tokens   PushToken[]
+
+  @@map("admins")
+}
+
+model Customer {
+  id            Int            @id @default(autoincrement())
+  phone_number  String         @unique
+  name          String?
+  profile_image String?        @db.Text
+  email         String?
+  address       String?        @db.Text
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+
+  orders        Order[]
+  notifications Notification[]
+  push_tokens   PushToken[]
+
+  @@map("customers")
+}
+
+model Business {
+  id           Int      @id @default(autoincrement())
+  name         String
+  tagline      String?  @db.Text
+  logo         String?  @db.Text
+  description  String   @db.Text
+  history      String?  @db.Text
+  mission      String?  @db.Text
+  vision       String?  @db.Text
+  phone        String?
+  email        String?
+  website      String?
+  address      String?  @db.Text
+  social_links Json?
+  hero_banner  String?  @db.Text
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("business")
+}
+
+model Owner {
+  id           Int      @id @default(autoincrement())
+  name         String
+  photo        String?  @db.Text
+  position     String
+  biography    String   @db.Text
+  experience   String?  @db.Text
+  contact      String?
+  email        String?
+  social_links Json?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("owners")
+}
+
+model Branch {
+  id            Int      @id @default(autoincrement())
+  name          String
+  description   String?  @db.Text
+  address       String   @db.Text
+  phone         String?
+  latitude      Float?
+  longitude     Float?
+  map_url       String?  @db.Text
+  opening_hours String?
+  image         String?  @db.Text
+  can_order     Boolean  @default(false)
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  orders Order[]
+
+  @@map("branches")
+}
+
+model Category {
+  id         Int      @id @default(autoincrement())
+  name       String
+  slug       String   @unique
+  image      String?  @db.Text
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id             Int      @id @default(autoincrement())
+  category_id    Int?
+  category       Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  name           String
+  slug           String   @unique
+  description    String   @db.Text
+  price          Decimal  @db.Decimal(10, 2)
+  discount_price Decimal? @db.Decimal(10, 2)
+  stock_quantity Int      @default(0)
+  main_image     String   @db.Text
+  is_available   Boolean  @default(true)
+  is_featured    Boolean  @default(false)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  images      ProductImage[]
+  order_items OrderItem[]
+
+  @@index([category_id])
+  @@map("products")
+}
+
+model ProductImage {
+  id         Int      @id @default(autoincrement())
+  product_id Int
+  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  image_url  String   @db.Text
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
+
+  @@index([product_id])
+  @@map("product_images")
+}
+
+model Order {
+  id               Int           @id @default(autoincrement())
+  order_number     String        @unique
+  customer_id      Int
+  customer         Customer      @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  branch_id        Int
+  branch           Branch        @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  customer_name    String
+  customer_phone   String
+  delivery_address String?       @db.Text
+  order_type       OrderType
+  payment_method   PaymentMethod
+  payment_status   PaymentStatus @default(PENDING)
+  order_status     OrderStatus   @default(PENDING)
+  subtotal         Decimal       @db.Decimal(10, 2)
+  delivery_charge  Decimal       @default(0.00) @db.Decimal(10, 2)
+  total_amount     Decimal       @db.Decimal(10, 2)
+  notes            String?       @db.Text
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+
+  items OrderItem[]
+
+  @@index([customer_id])
+  @@index([branch_id])
+  @@map("orders")
+}
+
+model OrderItem {
+  id            Int      @id @default(autoincrement())
+  order_id      Int
+  order         Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product_id    Int
+  product       Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  product_name  String
+  product_price Decimal  @db.Decimal(10, 2)
+  quantity      Int
+  subtotal      Decimal  @db.Decimal(10, 2)
+
+  @@index([order_id])
+  @@index([product_id])
+  @@map("order_items")
+}
+
+model Notification {
+  id             Int       @id @default(autoincrement())
+  recipient_type String    @default("CUSTOMER") // "CUSTOMER" | "ADMIN" | "ALL"
+  customer_id    Int?
+  customer       Customer? @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  admin_id       Int?
+  admin          Admin?    @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  title          String
+  message        String    @db.Text
+  type           String    @default("SYSTEM") // "ORDER_PLACED" | "ORDER_STATUS" | "LOW_STOCK" | "PROMO" | "SYSTEM"
+  data           Json?
+  is_read        Boolean   @default(false)
+  created_at     DateTime  @default(now())
+
+  @@index([customer_id])
+  @@index([admin_id])
+  @@index([recipient_type, is_read])
+  @@map("notifications")
+}
+
+model PushToken {
+  id          Int       @id @default(autoincrement())
+  token       String    @unique
+  user_type   String    @default("CUSTOMER") // "CUSTOMER" | "ADMIN" | "GUEST"
+  customer_id Int?
+  customer    Customer? @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  admin_id    Int?
+  admin       Admin?    @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  device_type String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  @@index([customer_id])
+  @@index([admin_id])
+  @@map("push_tokens")
+}
+
+model OtpVerification {
+  id           Int      @id @default(autoincrement())
+  phone_number String
+  otp_hash     String
+  expires_at   DateTime
+  attempts     Int      @default(0)
+  verified     Boolean  @default(false)
+  created_at   DateTime @default(now())
+
+  @@index([phone_number])
+  @@map("otp_verifications")
+}
+
+model Setting {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  value       String   @db.Text
+  description String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("settings")
+}

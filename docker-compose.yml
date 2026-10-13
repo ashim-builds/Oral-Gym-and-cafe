@@ -1,0 +1,17 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: oral_gym_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: oral_gym_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - oral_gym_mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+volumes:
+  oral_gym_mysql_data:
+    name: oral_gym_mysql_data

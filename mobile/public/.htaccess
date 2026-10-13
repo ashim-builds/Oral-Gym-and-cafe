@@ -1,0 +1,84 @@
+# ==============================================================================
+# Frontend Static Asset & SPA Client Routing Configuration
+# Direct Static Delivery via Apache / LiteSpeed (Zero Node.js Runtime Overhead)
+# ==============================================================================
+
+Options -MultiViews
+RewriteEngine On
+
+# 1. Block access to hidden files and directories except .well-known
+<FilesMatch "^\.(?!well-known)">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 2. Gzip / Deflate Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript
+    AddOutputFilterByType DEFLATE application/javascript application/x-javascript application/json
+    AddOutputFilterByType DEFLATE application/xml application/xhtml+xml application/rss+xml
+    AddOutputFilterByType DEFLATE image/svg+xml image/x-icon font/ttf font/otf font/woff font/woff2
+</IfModule>
+
+# 3. Browser Caching Headers (mod_expires & mod_headers)
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault "access plus 1 month"
+
+    # HTML: Never cache so updates to index.html reflect immediately
+    ExpiresByType text/html "access plus 0 seconds"
+
+    # Service Workers & Manifests: Never cache
+    ExpiresByType application/manifest+json "access plus 0 seconds"
+    ExpiresByType application/json "access plus 0 seconds"
+
+    # Content-hashed immutable assets & fonts & images: 1-Year Cache
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType text/javascript "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType font/ttf "access plus 1 year"
+</IfModule>
+
+<IfModule mod_headers.c>
+    # index.html must never be cached by the browser
+    <FilesMatch "\.(html|htm)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires 0
+    </FilesMatch>
+
+    # Service Worker & Manifest
+    <FilesMatch "(sw\.js|service-worker\.js|manifest\.json)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires 0
+    </FilesMatch>
+
+    # Content-hashed bundles, fonts, and images: 1-Year Immutable
+    <FilesMatch "\.(js|css|webp|png|jpe?g|gif|svg|woff2?|ttf|otf)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+
+    # Security Headers
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# 4. SPA Client-Side Routing Fallback
+# If file or directory physically exists, serve directly
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Preserve 404 for missing static assets (never return index.html for missing images/css/js)
+RewriteCond %{REQUEST_URI} !\.(css|js|jpe?g|png|gif|svg|webp|ico|woff2?|ttf|eot|json|map)$ [NC]
+RewriteRule ^ index.html [L]

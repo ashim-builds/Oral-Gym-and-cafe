@@ -1,0 +1,39 @@
+# ==============================================================================
+# Phusion Passenger Process Hard-Capping for CloudLinux LVE Shared Hosting
+# ==============================================================================
+PassengerEnabled on
+PassengerAppType node
+PassengerStartupFile app.js
+PassengerAppRoot .
+
+# Hard-Cap Process Spawning (Keep NPROC < 15 and RAM minimal)
+PassengerMaxPoolSize 2
+PassengerMinInstances 1
+PassengerPoolIdleTime 300
+PassengerStatThrottleRate 60
+
+# Environmental Optimizations for Rust/Prisma Engine & Node.js libuv
+SetEnv NODE_ENV production
+SetEnv TOKIO_WORKER_THREADS 1
+SetEnv UV_THREADPOOL_SIZE 2
+
+# ==============================================================================
+# Security: Block direct browser access to sensitive files
+# ==============================================================================
+<FilesMatch "^(\.env|\.env\..*|\.git.*|package\.json|package-lock\.json|tsconfig\.json|.*\.sql|.*\.log|schema\.prisma)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Block access to hidden files/directories except .well-known
+<FilesMatch "^\.(?!well-known)">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# ==============================================================================
+# Response Compression
+# ==============================================================================
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/json application/javascript text/css text/plain text/html
+</IfModule>
