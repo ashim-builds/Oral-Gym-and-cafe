@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem, Product } from '../types';
 
+import shopService from '../services/shop.service';
+
 interface CartContextType {
   items: CartItem[];
   addToCart: (product: Product, quantity?: number) => void;
@@ -13,6 +15,7 @@ interface CartContextType {
   totalAmount: number;
   itemCount: number;
   setDeliveryCharge: (charge: number) => void;
+  refreshDeliverySettings: () => Promise<void>;
 }
 
 const CART_STORAGE_KEY = 'oral_gym_cart_v1';
@@ -22,10 +25,24 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>([]);
-  const [deliveryCharge, setDeliveryCharge] = useState<number>(DEFAULT_DELIVERY_FEE);
+  const [configuredDeliveryFee, setConfiguredDeliveryFee] = useState<number>(DEFAULT_DELIVERY_FEE);
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState<number | null>(null);
+
+  const fetchDeliverySettings = async () => {
+    try {
+      const data = await shopService.getDeliverySettings();
+      if (data && typeof data.delivery_charge === 'number') {
+        setConfiguredDeliveryFee(data.delivery_charge);
+        setFreeDeliveryThreshold(data.free_delivery_threshold);
+      }
+    } catch {
+      // Keep default
+    }
+  };
 
   useEffect(() => {
     loadCart();
+    fetchDeliverySettings();
   }, []);
 
   useEffect(() => {
@@ -102,6 +119,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return acc + price * item.quantity;
   }, 0);
 
+  const deliveryCharge =
+    freeDeliveryThreshold && subtotal >= freeDeliveryThreshold
+      ? 0
+      : configuredDeliveryFee;
+
   const totalAmount = subtotal > 0 ? subtotal + deliveryCharge : 0;
   const itemCount = items.reduce((acc, item) => acc + item.quantity, 0);
 
@@ -117,7 +139,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deliveryCharge,
         totalAmount,
         itemCount,
-        setDeliveryCharge,
+        setDeliveryCharge: (charge: number) => setConfiguredDeliveryFee(charge),
+        refreshDeliverySettings: fetchDeliverySettings,
       }}
     >
       {children}

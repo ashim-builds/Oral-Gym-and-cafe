@@ -334,23 +334,13 @@ export const HomeScreen: React.FC = () => {
                 activeOpacity={0.8}
                 onPress={() => setSelectedCategory(null)}
               >
-                <View
-                  style={[
-                    styles.categoryImage,
-                    {
-                      backgroundColor:
-                        selectedCategory === null ? COLORS.primary : COLORS.surfaceHighlight,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="apps-outline"
-                    size={22}
-                    color={selectedCategory === null ? COLORS.white : COLORS.textPrimary}
-                  />
-                </View>
+                <OptimizedImage
+                  source={{ uri: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=400&q=80" }}
+                  style={styles.categoryImage}
+                  aspectRatio={4 / 3}
+                  resizeMode="cover"
+                  fallbackIcon="apps-outline"
+                />
                 <View style={styles.categoryOverlay}>
                   <Text style={styles.categoryTitle}>All</Text>
                 </View>
@@ -382,28 +372,6 @@ export const HomeScreen: React.FC = () => {
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
-          </>
-        )}
-
-        {/* Featured & Trending Supplements (if featured items exist and no category filter) */}
-        {featuredProducts.length > 0 && selectedCategory === null && !searchQuery.trim() && (
-          <>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Ionicons name="flame" size={20} color={COLORS.primary} />
-                <Text style={styles.sectionTitle}>Featured & Trending</Text>
-              </View>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.featuredScroll}
-            >
-              {featuredProducts.map((p) => (
-                <ProductCard key={p.id} product={p} horizontal />
-              ))}
             </ScrollView>
           </>
         )}

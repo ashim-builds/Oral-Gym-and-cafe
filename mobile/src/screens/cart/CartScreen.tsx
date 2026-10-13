@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -20,9 +20,13 @@ import { OptimizedImage } from '../../components/OptimizedImage';
 
 export const CartScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const { items, updateQuantity, removeFromCart, clearCart, subtotal, deliveryCharge, totalAmount } = useCart();
+  const { items, updateQuantity, removeFromCart, clearCart, subtotal, deliveryCharge, totalAmount, refreshDeliverySettings } = useCart();
   const { authState } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
+
+  useEffect(() => {
+    refreshDeliverySettings?.().catch(() => {});
+  }, []);
 
   const handleCheckoutPress = () => {
     if (authState !== 'AUTHENTICATED') {

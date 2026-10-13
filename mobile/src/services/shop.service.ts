@@ -180,6 +180,11 @@ export class ShopService {
 
     return await fetcher();
   }
+
+  async getDeliverySettings(): Promise<{ delivery_charge: number; free_delivery_threshold: number | null }> {
+    const res = await api.get('/settings/delivery');
+    return res.data.data;
+  }
 }
 
 export const shopService = new ShopService();

@@ -17,6 +17,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { WebView } from 'react-native-webview';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
 import { Header } from '../../components/Header';
 import { useCart } from '../../context/CartContext';
@@ -41,6 +42,16 @@ export const CheckoutScreen: React.FC = () => {
   const [customMapInput, setCustomMapInput] = useState('');
   const [notes, setNotes] = useState('');
   const [orderingBranch, setOrderingBranch] = useState<Branch | null>(null);
+
+  // Leaflet & OpenStreetMap interactive state
+  const [selectedCoords, setSelectedCoords] = useState<{ lat: number; lng: number }>({
+    lat: 28.2096, // Pokhara default
+    lng: 83.9856,
+  });
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({
+    lat: 28.2096,
+    lng: 83.9856,
+  });
 
   const [preview, setPreview] = useState<{
     subtotal: number;
@@ -99,6 +110,8 @@ export const CheckoutScreen: React.FC = () => {
       const { latitude, longitude } = loc.coords;
       const gMapLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
       setMapUrl(gMapLink);
+      setSelectedCoords({ lat: latitude, lng: longitude });
+      setMapCenter({ lat: latitude, lng: longitude });
 
       // Attempt reverse geocoding to suggest text address
       try {
@@ -114,12 +127,65 @@ export const CheckoutScreen: React.FC = () => {
         }
       } catch {}
 
-      Alert.alert('GPS Location Locked', 'Your Google Map delivery coordinates have been attached!');
+      Alert.alert('GPS Location Locked', 'Your delivery coordinates have been attached!');
     } catch (err: any) {
       Alert.alert('Location Error', err.message || 'Could not fetch current GPS location.');
     } finally {
       setLocating(false);
     }
+  };
+
+  const handleMapMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'PIN_LOCATION') {
+        setSelectedCoords({ lat: Number(data.lat), lng: Number(data.lng) });
+      }
+    } catch {}
+  };
+
+  const handleLocateMeOnMap = async () => {
+    try {
+      setLocating(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Please grant location permission to locate yourself.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+      setSelectedCoords({ lat: latitude, lng: longitude });
+      setMapCenter({ lat: latitude, lng: longitude });
+    } catch (err: any) {
+      Alert.alert('Location Error', err.message || 'Could not fetch GPS location.');
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const handleConfirmLeafletLocation = async () => {
+    const gMapLink = `https://www.google.com/maps?q=${selectedCoords.lat.toFixed(6)},${selectedCoords.lng.toFixed(6)}`;
+    setMapUrl(gMapLink);
+
+    // Reverse geocode to suggest text address if empty or short
+    try {
+      const geoRes = await Location.reverseGeocodeAsync({
+        latitude: selectedCoords.lat,
+        longitude: selectedCoords.lng,
+      });
+      if (geoRes && geoRes.length > 0) {
+        const place = geoRes[0];
+        const formatted = [place.name, place.street, place.subregion, place.city, place.district]
+          .filter(Boolean)
+          .join(', ');
+        if (formatted) {
+          setAddress(formatted);
+        }
+      }
+    } catch {}
+
+    setShowMapModal(false);
+    Alert.alert('Location Confirmed', 'Delivery pin locked on Leaflet & OpenStreetMap!');
   };
 
   const handleApplyCustomMapLink = () => {
@@ -498,7 +564,7 @@ export const CheckoutScreen: React.FC = () => {
       </View>
       </KeyboardAvoidingView>
 
-      {/* Map Location Modal */}
+      {/* Interactive Leaflet & OpenStreetMap Location Modal */}
       <Modal
         visible={showMapModal}
         transparent
@@ -509,11 +575,16 @@ export const CheckoutScreen: React.FC = () => {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
-          <View style={styles.modalContainer}>
+          <View style={styles.leafletModalContainer}>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderTitleRow}>
                 <Ionicons name="map" size={20} color={COLORS.primary} />
-                <Text style={styles.modalTitle}>Set Google Map Location</Text>
+                <View>
+                  <Text style={styles.modalTitle}>Pin Location on Map</Text>
+                  <Text style={styles.modalSubtitleOSM}>
+                    Leaflet | &copy; OpenStreetMap
+                  </Text>
+                </View>
               </View>
               <TouchableOpacity
                 onPress={() => setShowMapModal(false)}
@@ -523,35 +594,84 @@ export const CheckoutScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalSubtitle}>
-              Provide your Google Maps pin or location link so our delivery team can reach your doorstep accurately.
-            </Text>
+            {/* Map Action Tools */}
+            <View style={styles.mapToolRow}>
+              <TouchableOpacity
+                style={styles.mapGpsCenterBtn}
+                onPress={handleLocateMeOnMap}
+                disabled={locating}
+                activeOpacity={0.8}
+              >
+                {locating ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="navigate" size={13} color={COLORS.primary} />
+                    <Text style={styles.mapGpsCenterBtnText}>Fly to My GPS</Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.modalOpenGMapBtn}
-              onPress={() => Linking.openURL('https://www.google.com/maps')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="navigate-circle" size={20} color={COLORS.white} />
-              <Text style={styles.modalOpenGMapBtnText}>1. Open Google Maps to Find Your Home</Text>
-            </TouchableOpacity>
+              <View style={styles.coordsBadge}>
+                <Ionicons name="pin" size={12} color={COLORS.accentEmerald} />
+                <Text style={styles.coordsBadgeText}>
+                  {selectedCoords.lat.toFixed(4)}, {selectedCoords.lng.toFixed(4)}
+                </Text>
+              </View>
+            </View>
 
-            <Text style={styles.modalStepHint}>
-              Tap "Share" on Google Maps, copy the link, and paste it below:
-            </Text>
-
-            <View style={styles.modalInputWrap}>
-              <Ionicons name="link-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.modalTextInput}
-                placeholder="Paste Google Maps link (e.g. https://maps.app.goo.gl/...)"
-                placeholderTextColor={COLORS.textMuted}
-                value={customMapInput}
-                onChangeText={setCustomMapInput}
-                autoCapitalize="none"
-                autoCorrect={false}
+            {/* Interactive Leaflet Map WebView */}
+            <View style={styles.leafletMapWrapper}>
+              <WebView
+                originWhitelist={['*']}
+                source={{
+                  html: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #f8fafc; }
+    .leaflet-container { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .leaflet-popup-content-wrapper { border-radius: 8px; font-size: 12px; font-weight: 600; box-shadow: 0 4px 6px rgba(0,0,0,0.15); }
+    .leaflet-control-attribution { font-size: 10px; background: rgba(255, 255, 255, 0.9) !important; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    var currentLat = ${mapCenter.lat};
+    var currentLng = ${mapCenter.lng};
+    var map = L.map('map', { zoomControl: true, attributionControl: true }).setView([currentLat, currentLng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | <a href="https://leafletjs.com/">Leaflet</a>',
+      maxZoom: 19
+    }).addTo(map);
+    var marker = L.marker([currentLat, currentLng], { draggable: true }).addTo(map);
+    marker.bindPopup("<b>Delivery Destination</b><br/>Tap or drag pin to your house").openPopup();
+    function notifyPosition(lat, lng) {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PIN_LOCATION', lat: lat, lng: lng }));
+      }
+    }
+    marker.on('dragend', function(e) { var pos = marker.getLatLng(); notifyPosition(pos.lat, pos.lng); });
+    map.on('click', function(e) { marker.setLatLng(e.latlng); marker.openPopup(); notifyPosition(e.latlng.lat, e.latlng.lng); });
+  </script>
+</body>
+</html>`,
+                }}
+                onMessage={handleMapMessage}
+                style={styles.leafletWebView}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
               />
             </View>
+
+            <Text style={styles.leafletHint}>
+              Tap anywhere on map or drag the pin. Delivery rider will navigate to this exact point.
+            </Text>
 
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
@@ -564,10 +684,11 @@ export const CheckoutScreen: React.FC = () => {
 
               <TouchableOpacity
                 style={styles.modalConfirmBtn}
-                onPress={handleApplyCustomMapLink}
-                activeOpacity={0.8}
+                onPress={handleConfirmLeafletLocation}
+                activeOpacity={0.85}
               >
-                <Text style={styles.modalConfirmBtnText}>Save Map Pin</Text>
+                <Ionicons name="checkmark-circle" size={17} color={COLORS.white} style={{ marginRight: 6 }} />
+                <Text style={styles.modalConfirmBtnText}>Confirm Delivery Pin</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -933,6 +1054,76 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     paddingBottom: Platform.OS === 'ios' ? 36 : 24,
     gap: 12,
+  },
+  leafletModalContainer: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: SPACING.lg,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    gap: 8,
+    maxHeight: '94%',
+  },
+  modalSubtitleOSM: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  mapToolRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  mapGpsCenterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.25)',
+  },
+  mapGpsCenterBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  coordsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.surfaceHighlight,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  coordsBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  leafletMapWrapper: {
+    height: 330,
+    borderRadius: BORDER_RADIUS.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+    backgroundColor: COLORS.background,
+  },
+  leafletWebView: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  leafletHint: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 15,
   },
   modalHeader: {
     flexDirection: 'row',
