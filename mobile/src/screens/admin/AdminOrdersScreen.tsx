@@ -17,7 +17,80 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS } from '../../constants/theme';
 import mobileAdminService from '../../services/admin.service';
 
-const ORDER_STATUS_FLOW = ['PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY', 'READY_FOR_PICKUP', 'DELIVERED', 'COMPLETED', 'CANCELLED'];
+interface StatusOption {
+  key: string;
+  label: (order: any) => string;
+  icon: (order: any) => any;
+  color: string;
+  description: (order: any) => string;
+}
+
+const ORDER_PROGRESS_STEPS: StatusOption[] = [
+  {
+    key: 'PENDING',
+    label: () => 'Pending Approval',
+    icon: () => 'hourglass-outline',
+    color: COLORS.accentAmber,
+    description: () => 'New order waiting for confirmation',
+  },
+  {
+    key: 'CONFIRMED',
+    label: () => 'Order Confirmed',
+    icon: () => 'checkmark-outline',
+    color: COLORS.accentCyan,
+    description: () => 'Order verified and accepted',
+  },
+  {
+    key: 'PROCESSING',
+    label: () => 'Preparing Order',
+    icon: () => 'cube-outline',
+    color: '#9333ea',
+    description: () => 'Packing supplements & preparing food',
+  },
+  {
+    key: 'READY',
+    label: (order) =>
+      (order?.order_type || order?.delivery_type) === 'DELIVERY'
+        ? 'Out for Delivery'
+        : 'Ready for Store Pickup',
+    icon: (order) =>
+      (order?.order_type || order?.delivery_type) === 'DELIVERY'
+        ? 'bicycle-outline'
+        : 'storefront-outline',
+    color: COLORS.info,
+    description: (order) =>
+      (order?.order_type || order?.delivery_type) === 'DELIVERY'
+        ? 'Rider is on the way to customer'
+        : 'Order packed & waiting at gym/cafe counter',
+  },
+  {
+    key: 'COMPLETED',
+    label: (order) =>
+      (order?.order_type || order?.delivery_type) === 'DELIVERY'
+        ? 'Delivered & Done'
+        : 'Picked Up & Done',
+    icon: () => 'checkmark-done-circle-outline',
+    color: COLORS.accentEmerald,
+    description: () => 'Customer received order and completed',
+  },
+  {
+    key: 'CANCELLED',
+    label: () => 'Cancel Order',
+    icon: () => 'close-circle-outline',
+    color: COLORS.accentRose,
+    description: () => 'Order cancelled and stock restored',
+  },
+];
+
+const STATUS_FILTER_TABS = [
+  { key: 'ALL', label: 'All Orders' },
+  { key: 'PENDING', label: 'Pending' },
+  { key: 'CONFIRMED', label: 'Confirmed' },
+  { key: 'PROCESSING', label: 'Preparing' },
+  { key: 'READY', label: 'Ready / Out' },
+  { key: 'COMPLETED', label: 'Completed' },
+  { key: 'CANCELLED', label: 'Cancelled' },
+];
 
 export const AdminOrdersScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -107,16 +180,42 @@ export const AdminOrdersScreen: React.FC = () => {
         return { bg: 'rgba(245, 158, 11, 0.15)', text: COLORS.accentAmber };
       case 'CONFIRMED':
         return { bg: 'rgba(6, 182, 212, 0.15)', text: COLORS.accentCyan };
+      case 'PROCESSING':
+        return { bg: 'rgba(147, 51, 234, 0.15)', text: '#9333ea' };
+      case 'READY':
       case 'OUT_FOR_DELIVERY':
       case 'READY_FOR_PICKUP':
         return { bg: 'rgba(59, 130, 246, 0.15)', text: COLORS.info };
-      case 'DELIVERED':
       case 'COMPLETED':
+      case 'DELIVERED':
         return { bg: 'rgba(16, 185, 129, 0.15)', text: COLORS.accentEmerald };
       case 'CANCELLED':
         return { bg: 'rgba(244, 63, 94, 0.15)', text: COLORS.accentRose };
       default:
         return { bg: COLORS.surfaceDark, text: COLORS.textSecondary };
+    }
+  };
+
+  const getStatusLabel = (status: string, orderType?: string) => {
+    const isDelivery = orderType === 'DELIVERY';
+    switch (status) {
+      case 'PENDING':
+        return 'PENDING';
+      case 'CONFIRMED':
+        return 'CONFIRMED';
+      case 'PROCESSING':
+        return 'PREPARING';
+      case 'READY':
+      case 'OUT_FOR_DELIVERY':
+      case 'READY_FOR_PICKUP':
+        return isDelivery ? 'OUT FOR DELIVERY' : 'READY FOR PICKUP';
+      case 'COMPLETED':
+      case 'DELIVERED':
+        return isDelivery ? 'DELIVERED' : 'COMPLETED';
+      case 'CANCELLED':
+        return 'CANCELLED';
+      default:
+        return (status || '').replace(/_/g, ' ');
     }
   };
 
@@ -142,7 +241,9 @@ export const AdminOrdersScreen: React.FC = () => {
 
           <View style={styles.headerBadges}>
             <View style={[styles.statusBadge, { backgroundColor: sColor.bg }]}>
-              <Text style={[styles.statusBadgeText, { color: sColor.text }]}>{item.order_status}</Text>
+              <Text style={[styles.statusBadgeText, { color: sColor.text }]}>
+                {getStatusLabel(item.order_status, item.order_type || item.delivery_type)}
+              </Text>
             </View>
             <View
               style={[
@@ -211,14 +312,14 @@ export const AdminOrdersScreen: React.FC = () => {
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-          {['ALL', 'PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED', 'CANCELLED'].map((st) => (
+          {STATUS_FILTER_TABS.map((tab) => (
             <TouchableOpacity
-              key={st}
-              style={[styles.filterTab, statusFilter === st && styles.filterTabActive]}
-              onPress={() => setStatusFilter(st)}
+              key={tab.key}
+              style={[styles.filterTab, statusFilter === tab.key && styles.filterTabActive]}
+              onPress={() => setStatusFilter(tab.key)}
             >
-              <Text style={[styles.filterTabText, statusFilter === st && styles.filterTabTextActive]}>
-                {st.replace(/_/g, ' ')}
+              <Text style={[styles.filterTabText, statusFilter === tab.key && styles.filterTabTextActive]}>
+                {tab.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -255,7 +356,14 @@ export const AdminOrdersScreen: React.FC = () => {
               {/* Modal Header */}
               <View style={styles.modalHeader}>
                 <View>
-                  <Text style={styles.modalOrderNum}>{selectedOrder.order_number}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={styles.modalOrderNum}>{selectedOrder.order_number}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedOrder.order_status).bg }]}>
+                      <Text style={[styles.statusBadgeText, { color: getStatusColor(selectedOrder.order_status).text }]}>
+                        {getStatusLabel(selectedOrder.order_status, selectedOrder.order_type || selectedOrder.delivery_type)}
+                      </Text>
+                    </View>
+                  </View>
                   <Text style={styles.modalDate}>
                     {new Date(selectedOrder.created_at).toLocaleString()}
                   </Text>
@@ -336,10 +444,10 @@ export const AdminOrdersScreen: React.FC = () => {
                     <TouchableOpacity
                       style={[
                         styles.payChoiceBtn,
-                        selectedOrder.payment_status === 'UNPAID' && styles.payChoiceUnpaidActive,
+                        (selectedOrder.payment_status === 'PENDING' || selectedOrder.payment_status === 'UNPAID') && styles.payChoiceUnpaidActive,
                       ]}
                       disabled={updating}
-                      onPress={() => handleUpdateStatus(selectedOrder.id, undefined, 'UNPAID')}
+                      onPress={() => handleUpdateStatus(selectedOrder.id, undefined, 'PENDING')}
                     >
                       <Ionicons name="time-outline" size={16} color={COLORS.accentRose} />
                       <Text style={styles.payChoiceText}>UNPAID (Pending Cash)</Text>
@@ -363,18 +471,40 @@ export const AdminOrdersScreen: React.FC = () => {
                 <View style={styles.modalSection}>
                   <Text style={styles.sectionHeading}>UPDATE ORDER PROGRESS</Text>
                   <View style={styles.statusButtonsGrid}>
-                    {ORDER_STATUS_FLOW.map((st) => {
-                      const isCurrent = selectedOrder.order_status === st;
+                    {ORDER_PROGRESS_STEPS.map((st) => {
+                      const isCurrent = selectedOrder.order_status === st.key;
+                      const label = st.label(selectedOrder);
+                      const iconName = st.icon(selectedOrder);
+
                       return (
                         <TouchableOpacity
-                          key={st}
-                          style={[styles.statusOptionBtn, isCurrent && styles.statusOptionBtnActive]}
-                          disabled={updating || isCurrent}
-                          onPress={() => handleUpdateStatus(selectedOrder.id, st)}
+                          key={st.key}
+                          style={[
+                            styles.statusCardItem,
+                            isCurrent && { borderColor: st.color, backgroundColor: `${st.color}15` },
+                          ]}
+                          disabled={updating}
+                          onPress={() => handleUpdateStatus(selectedOrder.id, st.key)}
+                          activeOpacity={0.7}
                         >
-                          <Text style={[styles.statusOptionText, isCurrent && styles.statusOptionTextActive]}>
-                            {st.replace(/_/g, ' ')}
-                          </Text>
+                          <View style={[styles.statusCardIcon, { backgroundColor: isCurrent ? st.color : '#e2e8f0' }]}>
+                            <Ionicons name={iconName} size={18} color={isCurrent ? '#ffffff' : '#475569'} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <Text style={[styles.statusCardTitle, isCurrent && { color: st.color, fontWeight: '800' }]}>
+                                {label}
+                              </Text>
+                              {isCurrent ? (
+                                <View style={[styles.statusCurrentPill, { backgroundColor: st.color }]}>
+                                  <Text style={styles.statusCurrentPillText}>CURRENT</Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.statusTapToSet}>Tap to set</Text>
+                              )}
+                            </View>
+                            <Text style={styles.statusCardDesc}>{st.description(selectedOrder)}</Text>
+                          </View>
                         </TouchableOpacity>
                       );
                     })}
@@ -711,30 +841,49 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   statusButtonsGrid: {
+    gap: SPACING.sm,
+  },
+  statusCardItem: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.xs,
+    alignItems: 'center',
+    gap: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
   },
-  statusOptionBtn: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 8,
-    borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: COLORS.surfaceDark,
-    borderWidth: 1,
-    borderColor: COLORS.borderDark,
+  statusCardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  statusOptionBtnActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+  statusCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
   },
-  statusOptionText: {
+  statusCardDesc: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  statusCurrentPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.full,
+  },
+  statusCurrentPillText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  statusTapToSet: {
+    color: COLORS.textMuted,
     fontSize: 11,
     fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  statusOptionTextActive: {
-    color: COLORS.backgroundDark,
-    fontWeight: '800',
   },
   updatingLoader: {
     flexDirection: 'row',

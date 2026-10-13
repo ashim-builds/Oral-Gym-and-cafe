@@ -1,6 +1,7 @@
 import apiClient, { getAuthToken } from './api';
 import { adminApi, getAdminToken } from './admin.service';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 export interface NotificationItem {
   id: number;
@@ -56,6 +57,16 @@ class NotificationService {
       }
 
       if (Device.isDevice) {
+        // Expo Go dropped remote push notifications starting from SDK 53.
+        // Check if running in Expo Go; if so, skip remote token registration to avoid warnings/crashes.
+        const isExpoGo =
+          Constants.appOwnership === 'expo' ||
+          (Constants as any).executionEnvironment === 'storeClient';
+
+        if (isExpoGo) {
+          return null;
+        }
+
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
         if (existingStatus !== 'granted') {

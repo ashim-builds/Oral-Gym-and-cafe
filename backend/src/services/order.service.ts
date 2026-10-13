@@ -20,6 +20,45 @@ export interface CreateOrderInput {
   items: CheckoutItemInput[];
 }
 
+export function normalizeOrderStatus(status?: string | OrderStatus): OrderStatus | undefined {
+  if (!status) return undefined;
+  const s = String(status).toUpperCase().trim();
+  switch (s) {
+    case 'PENDING':
+      return OrderStatus.PENDING;
+    case 'CONFIRMED':
+      return OrderStatus.CONFIRMED;
+    case 'PROCESSING':
+      return OrderStatus.PROCESSING;
+    case 'READY':
+    case 'OUT_FOR_DELIVERY':
+    case 'READY_FOR_PICKUP':
+      return OrderStatus.READY;
+    case 'COMPLETED':
+    case 'DELIVERED':
+      return OrderStatus.COMPLETED;
+    case 'CANCELLED':
+    case 'CANCELED':
+      return OrderStatus.CANCELLED;
+    default:
+      return undefined;
+  }
+}
+
+export function normalizePaymentStatus(status?: string | PaymentStatus): PaymentStatus | undefined {
+  if (!status) return undefined;
+  const s = String(status).toUpperCase().trim();
+  switch (s) {
+    case 'PAID':
+      return PaymentStatus.PAID;
+    case 'PENDING':
+    case 'UNPAID':
+      return PaymentStatus.PENDING;
+    default:
+      return undefined;
+  }
+}
+
 export class OrderService {
   /**
    * Helper to generate human-readable unique order number (e.g., OG-20260927-4821)
@@ -337,9 +376,9 @@ export class OrderService {
    * Admin: Get all orders with search, filters, pagination
    */
   async getAllOrdersAdmin(query: {
-    order_status?: OrderStatus;
-    payment_status?: PaymentStatus;
-    order_type?: OrderType;
+    order_status?: OrderStatus | string;
+    payment_status?: PaymentStatus | string;
+    order_type?: OrderType | string;
     search?: string;
     page?: number;
     limit?: number;
@@ -350,14 +389,16 @@ export class OrderService {
 
     const where: any = {};
 
-    if (query.order_status) {
-      where.order_status = query.order_status;
+    const targetOrderStatus = normalizeOrderStatus(query.order_status);
+    if (targetOrderStatus) {
+      where.order_status = targetOrderStatus;
     }
-    if (query.payment_status) {
-      where.payment_status = query.payment_status;
+    const targetPaymentStatus = normalizePaymentStatus(query.payment_status);
+    if (targetPaymentStatus) {
+      where.payment_status = targetPaymentStatus;
     }
-    if (query.order_type) {
-      where.order_type = query.order_type;
+    if (query.order_type && query.order_type !== 'ALL') {
+      where.order_type = query.order_type as OrderType;
     }
 
     if (query.search && query.search.trim()) {
@@ -445,8 +486,8 @@ export class OrderService {
   async updateOrderStatusAdmin(
     orderId: number,
     data: {
-      order_status?: OrderStatus;
-      payment_status?: PaymentStatus;
+      order_status?: OrderStatus | string;
+      payment_status?: PaymentStatus | string;
       notes?: string;
     }
   ) {
@@ -459,10 +500,13 @@ export class OrderService {
       throw new Error('Order not found');
     }
 
+    const targetOrderStatus = data.order_status ? normalizeOrderStatus(data.order_status) : undefined;
+    const targetPaymentStatus = data.payment_status ? normalizePaymentStatus(data.payment_status) : undefined;
+
     const updatedOrder = await prisma.$transaction(async (tx) => {
       // If order is being cancelled from non-cancelled state, restore product stock
       if (
-        data.order_status === OrderStatus.CANCELLED &&
+        targetOrderStatus === OrderStatus.CANCELLED &&
         existingOrder.order_status !== OrderStatus.CANCELLED
       ) {
         for (const item of existingOrder.items) {
@@ -478,8 +522,8 @@ export class OrderService {
       return await tx.order.update({
         where: { id: orderId },
         data: {
-          ...(data.order_status ? { order_status: data.order_status } : {}),
-          ...(data.payment_status ? { payment_status: data.payment_status } : {}),
+          ...(targetOrderStatus ? { order_status: targetOrderStatus } : {}),
+          ...(targetPaymentStatus ? { payment_status: targetPaymentStatus } : {}),
           ...(data.notes !== undefined ? { notes: data.notes } : {}),
         },
         include: {
@@ -489,8 +533,8 @@ export class OrderService {
       });
     });
 
-    if (data.order_status && existingOrder && data.order_status !== existingOrder.order_status) {
-      notificationService.notifyOrderStatusChanged(updatedOrder, data.order_status).catch((err) => {
+    if (targetOrderStatus && existingOrder && targetOrderStatus !== existingOrder.order_status) {
+      notificationService.notifyOrderStatusChanged(updatedOrder, targetOrderStatus).catch((err) => {
         console.warn('Failed to send status update notification:', err.message);
       });
     }
