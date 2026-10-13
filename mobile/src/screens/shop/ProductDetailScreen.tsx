@@ -100,8 +100,8 @@ export const ProductDetailScreen: React.FC = () => {
           <OptimizedImage
             source={{ uri: product.main_image }}
             style={styles.productImage}
-            aspectRatio={1}
-            resizeMode="cover"
+            imageStyle={styles.imageInner}
+            resizeMode="contain"
           />
 
           {product.is_featured && (
@@ -180,11 +180,12 @@ export const ProductDetailScreen: React.FC = () => {
                   ]}
                   onPress={handleDecrease}
                   disabled={quantity <= 1}
+                  activeOpacity={0.8}
                 >
                   <Ionicons
                     name="remove"
                     size={18}
-                    color={quantity <= 1 ? COLORS.textMuted : COLORS.white}
+                    color={quantity <= 1 ? "#94a3b8" : "#ffffff"}
                   />
                 </TouchableOpacity>
 
@@ -198,14 +199,15 @@ export const ProductDetailScreen: React.FC = () => {
                   ]}
                   onPress={handleIncrease}
                   disabled={quantity >= product.stock_quantity}
+                  activeOpacity={0.8}
                 >
                   <Ionicons
                     name="add"
                     size={18}
                     color={
                       quantity >= product.stock_quantity
-                        ? COLORS.textMuted
-                        : COLORS.white
+                        ? "#94a3b8"
+                        : "#ffffff"
                     }
                   />
                 </TouchableOpacity>
@@ -302,11 +304,20 @@ const styles = StyleSheet.create({
   },
   imageBox: {
     width: "100%",
-    height: 320,
-    backgroundColor: COLORS.surface,
+    aspectRatio: 1,
+    maxHeight: 380,
+    backgroundColor: "#ffffff",
     position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingBottom: 16,
   },
   productImage: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#ffffff",
+  },
+  imageInner: {
     width: "100%",
     height: "100%",
   },
@@ -445,33 +456,37 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.surfaceBorder,
   },
   quantityLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.textSecondary,
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#000000",
   },
   stepperContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.surface,
+    backgroundColor: "#f8fafc",
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceBorder,
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    padding: 3,
+    gap: 4,
   },
   stepperButton: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: "#000000",
     alignItems: "center",
     justifyContent: "center",
   },
   stepperButtonDisabled: {
-    opacity: 0.3,
+    backgroundColor: "#e2e8f0",
   },
   stepperValue: {
-    width: 36,
+    minWidth: 38,
     textAlign: "center",
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontWeight: "800",
+    color: "#000000",
+    fontSize: 16,
+    fontWeight: "900",
   },
   descSection: {
     paddingVertical: SPACING.lg,

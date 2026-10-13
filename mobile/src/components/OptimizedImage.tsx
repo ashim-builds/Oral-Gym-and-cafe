@@ -151,12 +151,12 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#161616',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },
   skeleton: {
-    backgroundColor: '#262626',
+    backgroundColor: '#f1f5f9',
     zIndex: 1,
   },
   image: {
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   fallbackContainer: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#1b1d22',
+    backgroundColor: '#f8fafc',
     justifyContent: 'center',
     alignItems: 'center',
   },
